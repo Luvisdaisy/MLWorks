@@ -15,21 +15,16 @@ def get_proxy():
 
 def delete_proxy(proxy):
     requests.get("http://127.0.0.1:5010/delete/?proxy={}".format(proxy))
-
-
-ua = UserAgent()
-
-
 # 爬取豆瓣电影TOP250的电影序号、ID、名称、上映时间、导演、主演（前四名）、类型、国家/地区、时长
 
 
-def scrape_movie_list():
+def scrape_movie_list(ua, cookies):
     url = 'https://movie.douban.com/top250'
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'User-Agent': ua.random,
         'Connection': 'keep-alive',
-        'Cookie': 'll="118238"; bid=z8JTeV5on_8; dbcl2="244448908:WwAau8zKCt4"; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; __utmz=30149280.1685369784.7.3.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ck=PeMP; __utmc=30149280; __utmc=223695111; __utmz=223695111.1685423422.11.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); frodotk_db="a801fe883fb3bae4f805fb98bf1b30ac"; _pk_ref.100001.4cf6=["","",1685431208,"https://www.douban.com/misc/sorry?original-url=https://movie.douban.com/top250?start=0&filter="]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685423120.1685431208.11; __utmb=30149280.0.10.1685431208; __utma=223695111.1661283949.1685025570.1685423422.1685431208.12; __utmb=223695111.0.10.1685431208',
+        'Cookie': cookies,
         'Host': 'movie.douban.com',
         'Referer': 'https://www.bing.com/'
     }
@@ -44,21 +39,25 @@ def scrape_movie_list():
         while retry_flag:
             proxy = get_proxy().get('proxy')
             try:
+                time.sleep(20)
                 response = requests.get(url, headers=headers, proxies={
                                         "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
-                response.raise_for_status()
+                # response = requests.get(url, headers=headers, timeout=20)
+                print(response)
                 soup = BeautifulSoup(response.text, 'html.parser')
                 items = soup.find_all('div', class_='item')
-                movie_list = scrape_movie_info(movie_list, items)
+                movie_list = scrape_movie_info(movie_list, items, ua, cookies)
                 count += 1
                 retry_flag = False
             except Exception:
                 print('该代理出错，获取新代理...')
                 delete_proxy(proxy)
         next_page = soup.find('span', class_='next').find('a')
-        time.sleep(2)  # 添加2秒的延迟，避免过于频繁的请求
+        # 添加2秒的延迟，避免过于频繁的请求
         if next_page:
             url = 'https://movie.douban.com/top250'+next_page['href']
+            # 爬取完一页后输入新的Cookies
+            cookies = input('请更新Cookies:')
         else:
             url = None
 
@@ -67,7 +66,7 @@ def scrape_movie_list():
 # 爬取电影基本信息
 
 
-def scrape_movie_info(movie_list, items):
+def scrape_movie_info(movie_list, items, ua, cookies):
 
     for item in items:
         retry_flag = True
@@ -80,15 +79,19 @@ def scrape_movie_info(movie_list, items):
             'Connection': 'keep-alive',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Referer': 'https://movie.douban.com/top250',
-            'Cookies': 'll="118238"; bid=z8JTeV5on_8; dbcl2="244448908:WwAau8zKCt4"; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; __utmz=30149280.1685369784.7.3.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ck=PeMP; __utmc=30149280; __utmc=223695111; __utmz=223695111.1685423422.11.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); frodotk_db="a801fe883fb3bae4f805fb98bf1b30ac"; _pk_ref.100001.4cf6=["","",1685431208,"https://www.douban.com/misc/sorry?original-url=https://movie.douban.com/top250?start=0&filter="]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685423120.1685431208.11; __utmb=30149280.0.10.1685431208; __utma=223695111.1661283949.1685025570.1685423422.1685431208.12; __utmb=223695111.0.10.1685431208'
+            'Cookies': cookies
         }
+
         # 测试接口获取的代理
         while retry_flag:
             proxy = get_proxy().get('proxy')
             try:
+                time.sleep(5)
                 movie_detail = requests.get(
                     url=movie_url['href'], headers=detail_headers, proxies={"http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
-                movie_detail.raise_for_status()
+                # movie_detail = requests.get(
+                #     url=movie_url['href'], headers=detail_headers, timeout=20)
+                print(movie_detail)
                 soup_detail = BeautifulSoup(movie_detail.text, 'html.parser')
                 # 提取上映年份
                 year = soup_detail.find(
@@ -129,26 +132,31 @@ def scrape_movie_info(movie_list, items):
 # 爬取电影评论的用户ID和评分值
 
 
-def scrape_movie_reviews(movie_id):
+def scrape_movie_reviews(movie_id, ua, cookies):
     url = f'https://movie.douban.com/subject/{movie_id}/comments?start=0&limit=20&status=P&sort=new_score'
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'User-Agent': ua.random,
         'Connection': 'keep-alive',
-        'Cookie': 'll="118238"; bid=z8JTeV5on_8; dbcl2="244448908:WwAau8zKCt4"; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; __utmz=30149280.1685369784.7.3.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ck=PeMP; __utmc=30149280; __utmc=223695111; __utmz=223695111.1685423422.11.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); frodotk_db="a801fe883fb3bae4f805fb98bf1b30ac"; _pk_ref.100001.4cf6=["","",1685431208,"https://www.douban.com/misc/sorry?original-url=https://movie.douban.com/top250?start=0&filter="]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685423120.1685431208.11; __utmb=30149280.0.10.1685431208; __utma=223695111.1661283949.1685025570.1685423422.1685431208.12; __utmb=223695111.0.10.1685431208',
+        'Cookie': cookies,
         'Host': 'movie.douban.com',
         'Referer': f'https://movie.douban.com/subject/{movie_id}/'
     }
     review_list = []
 
     while url and len(review_list) < 600:
+        if len(review_list) % 50 == 0:
+            # 爬取50条评分后输入新的Cookies
+            cookies = input('请更新Cookies:')
         retry_flag = True
         while retry_flag:
             proxy = get_proxy().get('proxy')
             try:
+                time.sleep(5)
                 response = requests.get(url, headers=headers, proxies={
                                         "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
-                response.raise_for_status()
+                # response = requests.get(url, headers=headers, timeout=20)
+                print(response)
                 retry_flag = False
             except Exception:
                 print('该代理出错，获取新代理...')
@@ -161,8 +169,7 @@ def scrape_movie_reviews(movie_id):
             url = next_page['href']
         else:
             url = None
-
-        time.sleep(2)  # 添加2秒的延迟，避免过于频繁的请求
+          # 添加20秒的延迟，避免过于频繁的请求
     print(f'获取到{movie_id}的评论信息')
     return review_list
 
@@ -186,20 +193,24 @@ def save_to_csv(data, filename):
 
 
 if __name__ == '__main__':
+
+    ua = UserAgent()
+    cookies = 'll="118238"; bid=z8JTeV5on_8; dbcl2="244448908:WwAau8zKCt4"; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; __utmz=30149280.1685369784.7.3.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ck=PeMP; __utmc=30149280; __utmc=223695111; __utmz=223695111.1685423422.11.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); frodotk_db="a801fe883fb3bae4f805fb98bf1b30ac"; ct=y; _pk_ref.100001.4cf6=["","",1685457945,"https://www.douban.com/misc/sorry?original-url=https://movie.douban.com/top250?start=0&filter="]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685455446.1685457945.15; __utmb=30149280.0.10.1685457945; __utma=223695111.1661283949.1685025570.1685455446.1685457945.16; __utmb=223695111.0.10.1685457945'
     # 获取脚本所在目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # 爬取电影列表
-    movie_list = scrape_movie_list()
+    movie_list = scrape_movie_list(ua, cookies)
     # 保存电影列表数据到CSV文件
     save_to_csv(movie_list, os.path.join(script_dir, 'movie_data.csv'))
 
     # 爬取电影评论数据并保存到CSV文件
     # 爬取评论列表
     reviews = []
+    cookies = input('准备爬取评分信息,请更新Cookie:')
     for movie in movie_list:
         movie_id = movie[1]
-        movie_reviews = scrape_movie_reviews(movie_id)
+        movie_reviews = scrape_movie_reviews(movie_id, ua, cookies)
         reviews.extend(movie_reviews)
     # 保存评论列表数据到CSV文件
     save_to_csv(reviews, os.path.join(script_dir, 'movie_reviews.csv'))
