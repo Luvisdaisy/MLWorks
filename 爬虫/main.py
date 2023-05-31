@@ -19,7 +19,7 @@ def delete_proxy(proxy):
 
 
 def scrape_movie_list(ua, cookies):
-    url = 'https://movie.douban.com/top250'
+    url = 'https://movie.douban.com/top250?start=125&filter='
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'User-Agent': ua.random,
@@ -38,6 +38,7 @@ def scrape_movie_list(ua, cookies):
         # 测试接口获取的代理
         while retry_flag:
             proxy = get_proxy().get('proxy')
+            print(proxy)
             try:
                 time.sleep(20)
                 response = requests.get(url, headers=headers, proxies={
@@ -49,8 +50,12 @@ def scrape_movie_list(ua, cookies):
                 movie_list = scrape_movie_info(movie_list, items, ua, cookies)
                 count += 1
                 retry_flag = False
-            except Exception:
-                print('该代理出错，获取新代理...')
+            except Exception as e:
+                save_to_csv_rewrite(movie_list, os.path.join(
+                    script_dir, 'movie_data_test.csv'))
+                print(url)
+                print(e)
+                print('获取新代理...')
                 delete_proxy(proxy)
         next_page = soup.find('span', class_='next').find('a')
         # 添加2秒的延迟，避免过于频繁的请求
@@ -85,12 +90,13 @@ def scrape_movie_info(movie_list, items, ua, cookies):
         # 测试接口获取的代理
         while retry_flag:
             proxy = get_proxy().get('proxy')
+            print(proxy)
             try:
-                time.sleep(5)
+                time.sleep(20)
                 movie_detail = requests.get(
                     url=movie_url['href'], headers=detail_headers, proxies={"http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
-                # movie_detail = requests.get(
-                #     url=movie_url['href'], headers=detail_headers, timeout=20)
+                movie_detail = requests.get(
+                    url=movie_url['href'], headers=detail_headers, timeout=20)
                 print(movie_detail)
                 soup_detail = BeautifulSoup(movie_detail.text, 'html.parser')
                 # 提取上映年份
@@ -102,12 +108,15 @@ def scrape_movie_info(movie_list, items, ua, cookies):
                 # 提取导演信息
                 director = soup_detail.find(
                     'a', attrs={'rel': 'v:directedBy'}).text
-                # 提取演员信息（前四名）
-                actors_box = soup_detail.find('span', class_='actor').find(
-                    'span', class_='attrs').find_all('a')
-                actors = []
-                for a in actors_box[:4]:
-                    actors.append(a.text)
+                # 提取演员信息（前四名）若无演员表则设置为空
+                try:
+                    actors = []
+                    actors_box = soup_detail.find('span', class_='actor').find(
+                        'span', class_='attrs').find_all('a')
+                    for a in actors_box[:4]:
+                        actors.append(a.text)
+                except AttributeError:
+                    actors = []
                 # 提取类型信息
                 genre_spans = soup_detail.find_all(
                     'span', attrs={'property': 'v:genre'})
@@ -118,13 +127,20 @@ def scrape_movie_info(movie_list, items, ua, cookies):
                 # 提取时长信息
                 duration = soup_detail.find(
                     'span', attrs={'property': 'v:runtime'}).text.replace('分钟', '')
+                # 提取评分
+                score = soup_detail.find(
+                    'strong', attrs={'property': 'v:average'}).text
+                # 提取评价人数
+                rater_num = soup_detail.find(
+                    'span', attrs={'property': 'v:votes'}).text
                 movie_list.append(
-                    [movie_num, movie_id, year, title, director, actors, genres, country, duration])
+                    [movie_num, movie_id, year, title, director, actors, genres, country, duration, score, rater_num])
                 time.sleep(5)  # 添加2秒的延迟，避免过于频繁的请求
                 print(f'获取到第{movie_num}部电影：{title}')
                 retry_flag = False
-            except Exception:
-                print('该代理出错，获取新代理...')
+            except Exception as e:
+                print(e)
+                print('获取新代理...')
                 delete_proxy(proxy)
 
     return movie_list
@@ -144,49 +160,69 @@ def scrape_movie_reviews(movie_id, ua, cookies):
     }
     review_list = []
 
-    while url and len(review_list) < 600:
-        if len(review_list) % 50 == 0:
-            # 爬取50条评分后输入新的Cookies
-            cookies = input('请更新Cookies:')
+    while url and len(review_list) < 200:
+        # 可以尝试定期更新cookies，但200条应该用不上吧，看具体情况
+        # if len(review_list) % 40 == 0:
+        #     # 爬取200条评分后输入新的Cookies
+        #     cookies = input('请更新Cookies:')
         retry_flag = True
         while retry_flag:
             proxy = get_proxy().get('proxy')
             try:
                 time.sleep(5)
+                # 代理
                 response = requests.get(url, headers=headers, proxies={
-                                        "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
+                                        "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=60)
+                # 无代理
                 # response = requests.get(url, headers=headers, timeout=20)
                 print(response)
                 retry_flag = False
-            except Exception:
-                print('该代理出错，获取新代理...')
+            except Exception as e:
+                print('Exception:', e)
+                print('获取新代理...')
                 delete_proxy(proxy)
         soup = BeautifulSoup(response.text, 'html.parser')
         comments = soup.find_all('div', class_='comment-item')
-        review_list = scrape_comment_info(comments, review_list)
+        review_list = scrape_comment_info(movie_id, comments, review_list)
         next_page = soup.find('a', class_='next')
         if next_page:
-            url = next_page['href']
+            url = f'https://movie.douban.com/subject/{movie_id}/comments' + \
+                next_page['href']
+            # time.sleep(20)  # 添加20秒的延迟，避免过于频繁的请求，建议这里在用自己ip爬的时候使用
         else:
             url = None
-          # 添加20秒的延迟，避免过于频繁的请求
+
     print(f'获取到{movie_id}的评论信息')
     return review_list
 
 # 爬取每条评价
 
 
-def scrape_comment_info(comments, review_list):
+def scrape_comment_info(movie_id, comments, review_list):
     for comment in comments:
+        # 获取用户id
         user_id = re.search(
             r'u(\d+)-', comment.find('div', class_='avatar').find('img')['src']).group(1)
-        rating = comment.find('span', class_='rating')['class'][0][-2]
-        review_list.append([movie_id, user_id, rating])
+        # 获取评分，若无评分就设置为0分
+        try:
+            rating = comment.find('span', class_='rating')['class'][0][-2]
+        except:
+            rating = '0'
+        # 获取短评内容
+        short = comment.find('span', class_='short').replace(' ', '')
+
+        review_list.append([movie_id, user_id, rating, short])
     return review_list
 
 
 # 保存数据到CSV文件
 def save_to_csv(data, filename):
+    with open(filename, 'a', encoding='utf-8-sig', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(data)
+
+
+def save_to_csv_rewrite(data, filename):
     with open(filename, 'w', encoding='utf-8-sig', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(data)
@@ -195,22 +231,32 @@ def save_to_csv(data, filename):
 if __name__ == '__main__':
 
     ua = UserAgent()
-    cookies = 'll="118238"; bid=z8JTeV5on_8; dbcl2="244448908:WwAau8zKCt4"; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; __utmz=30149280.1685369784.7.3.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ck=PeMP; __utmc=30149280; __utmc=223695111; __utmz=223695111.1685423422.11.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); frodotk_db="a801fe883fb3bae4f805fb98bf1b30ac"; ct=y; _pk_ref.100001.4cf6=["","",1685457945,"https://www.douban.com/misc/sorry?original-url=https://movie.douban.com/top250?start=0&filter="]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685455446.1685457945.15; __utmb=30149280.0.10.1685457945; __utma=223695111.1661283949.1685025570.1685455446.1685457945.16; __utmb=223695111.0.10.1685457945'
-    # 获取脚本所在目录
+    # 开始运行前打开对应的网页设置好cookies
+    # 根据经验这几个网页的cookies都一样，设置为变量直接传参
+    # ps：这个cookies好像是不会很快改变但是我仍然设置了阶段性更新cookie
+    cookies = 'll="118238"; bid=z8JTeV5on_8; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ct=y; dbcl2="244448908:mBh74PWFgvo"; __utmz=30149280.1685523340.17.5.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); __utmz=223695111.1685523340.18.7.utmcsr=bing|utmccn=(organic)|utmcmd=organic|utmctr=(not provided); ck=SW0a; __utmc=30149280; __utmc=223695111; frodotk_db="7f9fd0e0d5b95a577edf72a2812c0f05"; _pk_ref.100001.4cf6=["","",1685538397,"https://www.bing.com/"]; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685523340.1685538398.18; __utma=223695111.1661283949.1685025570.1685523340.1685538398.19'
+    # 获取脚本所在目录, 用于将输出的文件存放于脚本同目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # 电影信息已经不需要再爬取了
     # 爬取电影列表
     movie_list = scrape_movie_list(ua, cookies)
     # 保存电影列表数据到CSV文件
     save_to_csv(movie_list, os.path.join(script_dir, 'movie_data.csv'))
 
     # 爬取电影评论数据并保存到CSV文件
-    # 爬取评论列表
+    # 爬取评论列表，直接读文件里爬取好的id去爬评论
+    # with open('E:\ProSpace\VSCodePros\Python\MLFinalWork\movie_data.csv', 'r', encoding='utf-8') as file:
+    #     reader = csv.reader(file)
+    #     movie_list = list(reader)
     reviews = []
-    cookies = input('准备爬取评分信息,请更新Cookie:')
-    for movie in movie_list:
+    # 只爬评论就不用了
+    # cookies = input('准备爬取评分信息,请更新Cookie:')
+    for movie in movie_list:  # for movie in movie_list[:50]:在这里设置爬取的范围
         movie_id = movie[1]
         movie_reviews = scrape_movie_reviews(movie_id, ua, cookies)
         reviews.extend(movie_reviews)
+    movie_reviews = scrape_movie_reviews(movie_id, ua, cookies)
+
     # 保存评论列表数据到CSV文件
     save_to_csv(reviews, os.path.join(script_dir, 'movie_reviews.csv'))

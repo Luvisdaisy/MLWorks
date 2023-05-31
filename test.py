@@ -12,10 +12,10 @@ with open('E:\ProSpace\VSCodePros\Python\MLFinalWork\movie_data.csv', 'r', encod
 client = MongoClient('mongodb://localhost:27017/')
 
 # 选择或创建数据库
-db = client['mytestdatabase']
+db = client['doubantop205_db']
 
 # 选择或创建集合
-collection = db['mytestcollection']
+collection = db['movie_info_list']
 
 # 遍历电影列表并存储到MongoDB
 for movie in movie_list:
