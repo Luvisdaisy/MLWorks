@@ -16,12 +16,11 @@ def clean_text(text):
 
 
 def process_csv(file):
+    print('开始对评论进行清洗...')
     cleaned_data = []
     with open(file, 'r', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for i, row in enumerate(reader):
-            if i == 0:  # 跳过表头行
-                continue
             if len(row) > 3:
                 review_data = {
                     'movie_id': row[0],
@@ -37,3 +36,5 @@ def process_csv(file):
         for data in cleaned_data:
             writer.writerow([data['movie_id'], data['user_id'],
                              data['user_rating'], data['comment']])
+
+    print('清洗完成')

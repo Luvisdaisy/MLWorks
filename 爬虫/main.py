@@ -1,11 +1,14 @@
+import pandas as pd
 import csv
 import os
-import time
 import re
+import time
 
+import text_clean
 import requests
-from fake_useragent import UserAgent
+import mongo
 from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 
 
 # 基于proxy_pool项目的代理池
@@ -15,10 +18,10 @@ def get_proxy():
 
 def delete_proxy(proxy):
     requests.get("http://127.0.0.1:5010/delete/?proxy={}".format(proxy))
+
+
 # 爬取豆瓣电影TOP250的电影序号、ID、名称、上映时间、导演、主演（前四名）、类型、国家/地区、时长
 # 爬取每个电影的信息页面
-
-
 def scrape_movie_list(ua, cookies):
     url = 'https://movie.douban.com/top250?start=125&filter='
     headers = {
@@ -64,9 +67,8 @@ def scrape_movie_list(ua, cookies):
 
     return movie_list
 
+
 # 爬取电影基本信息
-
-
 def scrape_movie_info(movie_list, items, ua, cookies):
 
     for item in items:
@@ -108,8 +110,6 @@ def scrape_movie_info(movie_list, items, ua, cookies):
 
 
 # 对电影信息页面进行处理
-
-
 def process_info_html(movie_num, movie_id, movie_detail, movie_list):
     soup_detail = BeautifulSoup(movie_detail.text, 'html.parser')
     # 提取上映年份
@@ -152,8 +152,6 @@ def process_info_html(movie_num, movie_id, movie_detail, movie_list):
 
 
 # 爬取电影评论的用户ID和评分值
-
-
 def scrape_movie_reviews(movie_id, ua, cookies):
     url = f'https://movie.douban.com/subject/{movie_id}/comments?start=0&limit=20&status=P&sort=new_score'
     print(url)
@@ -172,8 +170,8 @@ def scrape_movie_reviews(movie_id, ua, cookies):
         retry_flag = True
         while retry_flag:
             proxy = get_proxy().get('proxy')
+            time.sleep(20)
             try:
-                time.sleep(10)
                 # 代理
                 response = requests.get(url, headers=headers, proxies={
                                         "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
@@ -188,7 +186,7 @@ def scrape_movie_reviews(movie_id, ua, cookies):
             except (requests.exceptions.RequestException, Exception) as e:
                 print('Exception:', e)
                 wrong_time += 1
-                if wrong_time == 10:
+                if wrong_time == 5:
                     if(len(review_list) > 70):
                         return review_list
                     return -1
@@ -202,9 +200,8 @@ def scrape_movie_reviews(movie_id, ua, cookies):
             url = None
     return review_list
 
+
 # 爬取每条评价
-
-
 def scrape_comment_info(movie_id, comments, review_list):
     for comment in comments:
             # 获取用户id
@@ -228,33 +225,51 @@ def save_to_csv(data, filename):
         writer.writerows(data)
 
 
+# 对CSV文件去重
+def remove_duplicates(csv_file):
+    print('开始去重...')
+    # 读取CSV文件并创建DataFrame
+    df = pd.read_csv(csv_file, header=None)
+
+    # 去除重复的行，只保留第一个出现的行
+    df.drop_duplicates(inplace=True)
+
+    # 将处理后的DataFrame写回CSV文件
+    df.to_csv(csv_file, index=False, header=False)
+
+    print('去重完成！')
+
+
 if __name__ == '__main__':
 
     ua = UserAgent()
     # 开始运行前打开对应的网页设置好cookies
     # 根据经验这几个网页的cookies都一样，设置为变量直接传参
     # ps：这个cookies好像是不会很快改变但是我仍然设置了阶段性更新cookie
-    cookies = 'll="118238"; bid=z8JTeV5on_8; push_noty_num=0; push_doumail_num=0; __utmv=30149280.24444; _vwo_uuid_v2=D1711C5E4BA5B06F9CC17BF1AE5F03A7A|103a245fab24370190d517c188a327ee; __yadk_uid=lplGjeOQBGThY6ihSj4d10TWY3rNkZKZ; _pk_id.100001.4cf6=a9cd60a7576f5267.1685025570.; ct=y; dbcl2="244448908:mBh74PWFgvo"; ck=SW0a; _pk_ref.100001.4cf6=["","",1685581393,"https://cn.bing.com/"]; _pk_ses.100001.4cf6=1; ap_v=0,6.0; __utma=30149280.220114507.1685025469.1685549856.1685581394.21; __utmc=30149280; __utmz=30149280.1685581394.21.6.utmcsr=cn.bing.com|utmccn=(referral)|utmcmd=referral|utmcct=/; __utma=223695111.1661283949.1685025570.1685549856.1685581394.22; __utmb=223695111.0.10.1685581394; __utmc=223695111; __utmz=223695111.1685581394.22.8.utmcsr=cn.bing.com|utmccn=(referral)|utmcmd=referral|utmcct=/; frodotk_db="3a87dfdf0781df58af979f9d16859e08"; __utmt=1; __utmb=30149280.3.9.1685582327973'
-    # 获取脚本所在目录, 用于将输出的文件存放于脚本同目录
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    cookies = input('请查看页面是否正常并更新cookie:')
 
-    # 电影信息已经不需要再爬取了
-    # 爬取电影列表
+    movie_data_file = '../数据分析/movie_data.csv'
+    review_data_file = '../数据分析/movie_reviews.csv'
+
+    # # 爬取电影列表
     # movie_list = scrape_movie_list(ua, cookies)
     # # 保存电影列表数据到CSV文件
-    # save_to_csv(movie_list, os.path.join(script_dir, 'movie_data.csv'))
+    # save_to_csv(movie_list, movie_data_file)
+    # # 对电影列表去重
+    # remove_duplicates(movie_data_file)
 
     # 爬取电影评论数据并保存到CSV文件
     # 爬取评论列表，直接读文件里爬取好的id去爬评论
-    with open('E:\\ProSpace\\VSCodePros\\Python\\MLFinalWork\\爬虫\\movie_data.csv', 'r', encoding='utf-8') as file:
+    with open(movie_data_file, 'r', encoding='utf-8') as file:
         reader = csv.reader(file)
         movie_list = list(reader)
-    checkpoint_file = 'checkpoint.txt'  # 存储检查点的文件名
 
-# 读取存储的检查点（如果文件存在）
-    a = 1
-    # 只爬评论就不用了
-    # cookies = input('准备爬取评分信息,请更新Cookie:')
+    # 存储检查点的文件名
+    checkpoint_file = './checkpoint.txt'
+
+    # 断点初始化为1
+    last_save_index = 1
+
     for movie in movie_list:
         if os.path.exists(checkpoint_file):
             with open(checkpoint_file, 'r') as checkpoint:
@@ -267,23 +282,26 @@ if __name__ == '__main__':
         try:
             if duandian == movie_num:
                 time.sleep(5)
-                cookies = input('请查看页面是否正常并请更新cookie:')
                 movie_id = movie[1]
                 print(f'开始抓取第{movie_num}部电影的评论')
                 movie_reviews = scrape_movie_reviews(movie_id, ua, cookies)
                 print(f"获取到第{movie_num}部电影的{len(movie_reviews)}条评论")
-                if(len(movie_reviews) < 30):
+                if(len(movie_reviews) < 50):
                     break
                 reviews.extend(movie_reviews)
-                a += 1
-                # 更新检查点为当前电影的movie_num
+                # 断点更新
+                last_save_index += 1
+                # 更新检查点为last_save_index,即当前电影的movie_num
                 with open(checkpoint_file, 'w') as checkpoint:
-                    checkpoint.write(str(a))
-                # 保存评论列表数据到CSV文件
-                save_to_csv(reviews, os.path.join(
-                    script_dir, 'movie_reviews.csv'))
-                print('抓取完成')
-
+                    checkpoint.write(str(last_save_index))
+                # 补充评论列表数据到CSV文件
+                save_to_csv(reviews, review_data_file)
+                print('抓取完成，数据已保存')
         except Exception as e:
             print(e)
             break
+    # 对内容进行去重
+    remove_duplicates(review_data_file)
+    # 对评论进行清理
+    text_clean.process_csv(review_data_file)
+    mongo.runMongo()
