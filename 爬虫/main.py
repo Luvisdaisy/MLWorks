@@ -1,12 +1,12 @@
-import pandas as pd
 import csv
 import os
 import re
 import time
 
-import text_clean
-import requests
 import mongo
+import pandas as pd
+import requests
+import text_clean
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
@@ -20,7 +20,7 @@ def delete_proxy(proxy):
     requests.get("http://127.0.0.1:5010/delete/?proxy={}".format(proxy))
 
 
-# 爬取豆瓣电影TOP250的电影序号、ID、名称、上映时间、导演、主演（前四名）、类型、国家/地区、时长
+# 爬取豆瓣电影TOP250的电影序号、ID、名称、上映时间、导演、主演（前四名）、类型、国家/地区、时长、评分、评价人数
 # 爬取每个电影的信息页面
 def scrape_movie_list(ua, cookies):
     url = 'https://movie.douban.com/top250?start=125&filter='
@@ -181,7 +181,6 @@ def scrape_movie_reviews(movie_id, ua, cookies):
                 comments = soup.find_all('div', class_='comment-item')
                 review_list = scrape_comment_info(
                     movie_id, comments, review_list)
-
                 retry_flag = False
             except (requests.exceptions.RequestException, Exception) as e:
                 print('Exception:', e)
@@ -228,16 +227,12 @@ def save_to_csv(data, filename):
 # 对CSV文件去重
 def remove_duplicates(csv_file):
     print('开始去重...')
-    # 读取CSV文件并创建DataFrame
+
     df = pd.read_csv(csv_file, header=None)
-
-    # 去除重复的行，只保留第一个出现的行
     df.drop_duplicates(inplace=True)
-
-    # 将处理后的DataFrame写回CSV文件
     df.to_csv(csv_file, index=False, header=False)
 
-    print('去重完成！')
+    print('去重完成')
 
 
 if __name__ == '__main__':
@@ -251,12 +246,12 @@ if __name__ == '__main__':
     movie_data_file = '../数据分析/movie_data.csv'
     review_data_file = '../数据分析/movie_reviews.csv'
 
-    # # 爬取电影列表
-    # movie_list = scrape_movie_list(ua, cookies)
-    # # 保存电影列表数据到CSV文件
-    # save_to_csv(movie_list, movie_data_file)
-    # # 对电影列表去重
-    # remove_duplicates(movie_data_file)
+    # 爬取电影列表
+    movie_list = scrape_movie_list(ua, cookies)
+    # 保存电影列表数据到CSV文件
+    save_to_csv(movie_list, movie_data_file)
+    # 对电影列表去重
+    remove_duplicates(movie_data_file)
 
     # 爬取电影评论数据并保存到CSV文件
     # 爬取评论列表，直接读文件里爬取好的id去爬评论
@@ -274,7 +269,7 @@ if __name__ == '__main__':
         if os.path.exists(checkpoint_file):
             with open(checkpoint_file, 'r') as checkpoint:
                 duandian = checkpoint.read().strip()
-                a = int(duandian)
+                last_save_index = int(duandian)
         else:
             duandian = '1'
         reviews = []

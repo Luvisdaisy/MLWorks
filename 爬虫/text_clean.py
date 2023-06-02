@@ -20,7 +20,7 @@ def process_csv(file):
     cleaned_data = []
     with open(file, 'r', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
-        for i, row in enumerate(reader):
+        for row in enumerate(reader):
             if len(row) > 3:
                 review_data = {
                     'movie_id': row[0],

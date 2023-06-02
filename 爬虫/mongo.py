@@ -31,7 +31,6 @@ def information_storage(file):
 
             existing_movie = info_collection.find_one({'id': movie_data['id']})
             if existing_movie:
-                # print(f"电影已存在，执行更新操作：{existing_movie['title']}")
                 info_collection.update_one(
                     {'id': movie_data['id']}, {'$set': movie_data})
             else:
@@ -61,7 +60,6 @@ def review_storage(file):
             existing_review = review_collection.find_one(
                 {'movie_id': review_data['movie_id'], 'user_id': review_data['user_id']})
             if existing_review:
-                # print(f"评论已存在，执行更新操作：{existing_review['_id']}")
                 review_collection.update_one(
                     {'_id': existing_review['_id']}, {'$set': review_data})
             else:
