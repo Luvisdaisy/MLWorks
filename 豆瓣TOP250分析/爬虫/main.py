@@ -175,6 +175,7 @@ def scrape_movie_reviews(movie_id, ua, cookies):
                 # 代理
                 response = requests.get(url, headers=headers, proxies={
                                         "http": "http://{}".format(proxy), "https": "https://{}".format(proxy)}, timeout=20)
+                # response = requests.get(url, headers=headers, timeout=20)
                 print(response)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
