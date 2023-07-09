@@ -247,12 +247,12 @@ if __name__ == '__main__':
     movie_data_file = '../数据分析/movie_data.csv'
     review_data_file = '../数据分析/movie_reviews.csv'
 
-    # # 爬取电影列表
-    # movie_list = scrape_movie_list(ua, cookies)
-    # # 保存电影列表数据到CSV文件
-    # save_to_csv(movie_list, movie_data_file)
-    # # 对电影列表去重
-    # remove_duplicates(movie_data_file)
+    # 爬取电影列表
+    movie_list = scrape_movie_list(ua, cookies)
+    # 保存电影列表数据到CSV文件
+    save_to_csv(movie_list, movie_data_file)
+    # 对电影列表去重
+    remove_duplicates(movie_data_file)
 
     # 爬取电影评论数据并保存到CSV文件
     # 爬取评论列表，直接读文件里爬取好的id去爬评论
